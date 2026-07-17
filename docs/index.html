@@ -27,8 +27,17 @@
     padding:5px 10px;border-radius:8px}
   h1{font-size:clamp(20px,4.4vw,30px);margin:0;font-weight:800;letter-spacing:-.3px}
   .sub{color:var(--muted);font-size:13px;margin-top:2px}
-  .updated{margin-left:auto;text-align:right;font-size:12px;color:var(--muted)}
+  .rhs{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:7px}
+  .updated{text-align:right;font-size:12px;color:var(--muted)}
   .updated b{color:var(--text)}
+  .refresh{display:inline-flex;align-items:center;gap:6px;font:inherit;font-size:12px;font-weight:700;
+    color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:20px;
+    padding:7px 14px;cursor:pointer;transition:background .15s,opacity .15s;box-shadow:var(--shadow)}
+  .refresh:hover{background:var(--panel-2)}
+  .refresh:disabled{opacity:.55;cursor:default}
+  .refresh .ico{display:inline-block;font-size:14px;line-height:1}
+  .refresh.busy .ico{animation:spin .8s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
   .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--win);margin-right:5px;
     vertical-align:middle;box-shadow:0 0 0 0 rgba(58,208,122,.6);animation:pulse 2s infinite}
   @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(58,208,122,.5)}70%{box-shadow:0 0 0 7px rgba(58,208,122,0)}100%{box-shadow:0 0 0 0 rgba(58,208,122,0)}}
@@ -48,7 +57,7 @@
   .spot .rankline{color:var(--muted);font-size:13px}
   .statrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
   .stat{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 14px;min-width:70px;flex:1}
-  .stat .n{font-size:22px;font-weight:800;line-height:1}
+  .stat .n{font-size:22px;font-weight:800;line-height:1;white-space:nowrap}
   .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:4px}
   .next{margin-top:14px;background:var(--bg);border:1px dashed var(--gl-deep);border-radius:12px;padding:12px 14px}
   .next .lbl{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gl);font-weight:700}
@@ -116,22 +125,108 @@
       <h1>Finals · 40 &amp; Over</h1>
       <div class="sub">Tracking all six teams — spotlight on <b style="color:var(--gl)">Oakland Goodlife</b></div>
     </div>
-    <div class="updated" id="updated">Loading…</div>
+    <div class="rhs">
+      <div class="updated" id="updated">Loading…</div>
+      <button id="refresh" class="refresh" aria-label="Refresh scores now"><span class="ico">↻</span><span class="lbl">Refresh</span></button>
+    </div>
   </header>
 
   <div id="app"></div>
 
   <footer>
-    Auto-updates every ~2 hours from the official NARCH scoreboard ·
-    <a id="srclink" href="#" target="_blank" rel="noopener">Live source ↗</a><br>
-    This page also refreshes itself every 90&nbsp;seconds while open.
+    Live from the official NARCH scoreboard — updates when you open the page, tap <b>Refresh</b>, or automatically every 60&nbsp;seconds.<br>
+    <a id="srclink" href="#" target="_blank" rel="noopener">Open the official scoreboard ↗</a>
   </footer>
 </div>
 
 <script>
-const DATA_URL = "data/latest.json";
-const gl = v => v; // passthrough
+// --- Live data source: the same DigitalShift API that powers narch.com/stats.
+// Pulled directly in the viewer's browser, so Refresh gets real-time scores.
+const CSID = "fbc8b65d-927d-4b2c-838b-65a128f318c4";
+const API  = "https://web.api.digitalshift.ca";
+const DIV  = 50812;      // 40 & Over
+const LEAGUE = 67;
+const GL_ID = 690228;    // Oakland Goodlife - CA
+const FALLBACK_URL = "data/latest.json"; // used only if the live call fails
 
+const isGoodlife = (id,name) => id===GL_ID || (!!name && /goodlife/i.test(name));
+
+function heEnt(s){
+  return s.replace(/&quot;/g,'"').replace(/&#0*39;/g,"'").replace(/&apos;/g,"'")
+          .replace(/&lt;/g,'<').replace(/&gt;/g,'>')
+          .replace(/&#(\d+);/g,(_,n)=>String.fromCharCode(+n))
+          .replace(/&amp;/g,'&');
+}
+async function apiLogin(){
+  const r = await fetch(API+"/login",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({client_service_id:CSID})});
+  if(!r.ok) throw new Error("login "+r.status);
+  return (await r.json()).ticket.hash;
+}
+async function apiPartial(path,ticket){
+  const sep = path.includes("?") ? "&" : "?";
+  const r = await fetch(API+"/partials/stats/"+path+sep+"ticket="+ticket);
+  if(!r.ok) throw new Error("partial "+r.status);
+  return (await r.json()).content;
+}
+function parseGamesHtml(html){
+  const un = heEnt(html), byId = {};
+  for(const m of un.matchAll(/\{[^{}]*?"game_id":\d+[^{}]*\}/g)){
+    try{ const o = JSON.parse(m[0]); byId[o.game_id] = o; }catch(e){}
+  }
+  const out = Object.values(byId).map(g=>({
+    game_id:g.game_id,
+    number:(""+(g.number??"")).replace(/\.0+$/,""),
+    date:g.date, datetime:g.datetime, time:g.time, status:g.status||"",
+    home_team:g.home_team, home_team_short:g.home_team_short, home_team_id:g.home_team_id, home_score:g.home_score,
+    away_team:g.away_team, away_team_short:g.away_team_short, away_team_id:g.away_team_id, away_score:g.away_score,
+    overtime:g.overtime, shootout:g.shootout, rink:g.rink, facility:g.facility, watch_live_url:g.watch_live_url
+  }));
+  out.sort((a,b)=>(a.datetime||"").localeCompare(b.datetime||"") || (""+a.number).localeCompare(""+b.number));
+  return out;
+}
+function stripTags(s){ return heEnt(s.replace(/<[^>]+>/g,"")).trim(); }
+function parseStandingsHtml(html){
+  const tb = html.match(/<tbody>([\s\S]*?)<\/tbody>/); if(!tb) return [];
+  const out = [];
+  for(const rm of tb[1].matchAll(/<tr>([\s\S]*?)<\/tr>/g)){
+    const cells = [...rm[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(m=>m[1]);
+    if(cells.length < 9) continue;
+    const tc = cells[1];
+    const links = [...tc.matchAll(/<a[^>]*class="team-inline"[^>]*>([\s\S]*?)<\/a>/g)].map(m=>stripTags(m[1]));
+    const full = links[0] || stripTags(tc), short = links[1] || full;
+    const idm = tc.match(/\/team\/(\d+)/);
+    const num = i => { const t = stripTags(cells[i]); const n = parseInt(t,10); return isNaN(n)?t:n; };
+    out.push({rank:num(0), team:full, team_short:short, team_id: idm?+idm[1]:null,
+      gp:num(2), w:num(3), l:num(4), t:num(5), pts:num(6), ga:num(7), gf:num(8)});
+  }
+  return out;
+}
+async function fetchLive(){
+  const ticket = await apiLogin();
+  const [sh,st] = await Promise.all([
+    apiPartial("schedule/table?division_id="+DIV, ticket),
+    apiPartial("standings/table?division_id="+DIV, ticket)
+  ]);
+  const games = parseGamesHtml(sh), standings = parseStandingsHtml(st);
+  if(!games.length) throw new Error("no games parsed");
+  let glName = null;
+  standings.forEach(s=>{ s.is_goodlife = isGoodlife(s.team_id,s.team); if(s.is_goodlife) glName = s.team; });
+  games.forEach(g=>{
+    g.home_is_goodlife = isGoodlife(g.home_team_id,g.home_team);
+    g.away_is_goodlife = isGoodlife(g.away_team_id,g.away_team);
+    g.is_goodlife = g.home_is_goodlife || g.away_is_goodlife;
+  });
+  return {
+    generated_at:new Date().toISOString(),
+    division_id:DIV, division_name:"40 & Over",
+    source_url:`https://www.narch.com/stats#/${LEAGUE}/schedule?division_id=${DIV}`,
+    goodlife:{team_id:GL_ID, name: glName || "Oakland Goodlife - CA"},
+    standings, games
+  };
+}
+
+// --- rendering -------------------------------------------------------------
 function relTime(iso){
   const then = new Date(iso).getTime();
   const s = Math.round((Date.now()-then)/1000);
@@ -165,9 +260,7 @@ function statusPill(g){
 function spotlight(d){
   const s = d.standings.find(t=>t.is_goodlife);
   const games = d.games.filter(g=>g.is_goodlife);
-  const now = Date.now();
-  const next = games.find(g => notStarted(g.status) || isLive(g.status))
-            || games.slice().reverse().find(()=>false);
+  const next = games.find(g => notStarted(g.status) || isLive(g.status));
   const rankTxt = s ? `#${s.rank} of ${d.standings.length} · ${d.division_name}` : d.division_name;
   const rec = s ? `${s.w}-${s.l}-${s.t}` : "—";
   let nextHtml = "";
@@ -229,7 +322,6 @@ function teamRow(name, score, isWinner, isGL, hasScore){
 }
 
 function schedule(d){
-  // group by date
   const byDay = {};
   d.games.forEach(g=>{ (byDay[g.date] ||= []).push(g); });
   const days = Object.keys(byDay).sort();
@@ -260,25 +352,42 @@ function schedule(d){
   </section>`;
 }
 
+// --- load / refresh --------------------------------------------------------
+let busy = false;
 async function load(){
+  if(busy) return;
+  busy = true;
+  const btn = document.getElementById("refresh");
+  if(btn){ btn.disabled = true; btn.classList.add("busy"); }
+  let d = null, live = false;
   try{
-    const res = await fetch(DATA_URL + "?t=" + Date.now(), {cache:"no-store"});
-    if(!res.ok) throw new Error("HTTP "+res.status);
-    const d = await res.json();
-    document.getElementById("app").innerHTML =
-      spotlight(d) + standingsTable(d) + schedule(d);
+    d = await fetchLive();          // real-time, straight from NARCH
+    live = true;
+  }catch(e){
+    try{                            // fallback: last data committed by the 2-hour job
+      const res = await fetch(FALLBACK_URL + "?t=" + Date.now(), {cache:"no-store"});
+      if(res.ok) d = await res.json();
+    }catch(_){}
+  }
+  if(d){
+    document.getElementById("app").innerHTML = spotlight(d) + standingsTable(d) + schedule(d);
     const anyLive = d.games.some(g=>isLive(g.status));
     document.getElementById("updated").innerHTML =
-      `${anyLive?'<span class="dot"></span>Games live · ':''}Updated <b>${relTime(d.generated_at)}</b>`;
+      `${anyLive?'<span class="dot"></span>Games live · ':''}${live?"Live · ":"Cached · "}updated <b>${relTime(d.generated_at)}</b>`;
     const link = document.getElementById("srclink");
     if(d.source_url) link.href = d.source_url;
-  }catch(e){
+  }else{
     document.getElementById("app").innerHTML =
-      `<div class="err">Couldn't load the latest data (${esc(e.message)}). It will retry automatically — the scraper updates every couple of hours.</div>`;
+      `<div class="err">Couldn't reach the scoreboard right now — tap <b>Refresh</b> to try again.</div>`;
   }
+  if(btn){ btn.disabled = false; btn.classList.remove("busy"); }
+  busy = false;
 }
+
+document.getElementById("refresh").addEventListener("click", load);
+document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") load(); });
+setInterval(()=>{ if(document.visibilityState==="visible") load(); }, 60000);
 load();
-setInterval(load, 90000); // self-refresh while the tab is open
 </script>
 </body>
 </html>
