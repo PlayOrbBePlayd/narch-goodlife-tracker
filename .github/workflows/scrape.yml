@@ -1,0 +1,42 @@
+name: Update NARCH 40+ scores
+
+on:
+  schedule:
+    # Every 2 hours, on the hour (UTC). GitHub may delay runs under load.
+    - cron: "0 */2 * * *"
+  workflow_dispatch: {}   # lets you trigger a refresh manually from the Actions tab
+
+# Allow the job to commit the refreshed data back to the repo.
+permissions:
+  contents: write
+
+concurrency:
+  group: narch-scrape
+  cancel-in-progress: false
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Scrape latest scores
+        run: python scraper/scrape.py
+
+      - name: Commit updated data
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- docs/data/latest.json; then
+            echo "No changes to commit."
+          else
+            git add docs/data/latest.json
+            git commit -m "Update scores ($(date -u '+%Y-%m-%d %H:%M UTC')) [skip ci]"
+            git push
+          fi
