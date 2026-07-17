@@ -3,19 +3,25 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>NARCH Finals · 40 &amp; Over · GoodLife Tracker</title>
+<title>Oakland GoodLife · NARCH 40 &amp; Over Tracker</title>
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
 <style>
   :root{
-    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222c; --line:#2a2f3a;
-    --text:#e8ebf1; --muted:#9aa3b2; --accent:#ff3b3b; /* NARCH red */
-    --gl:#ffc21a; --gl-deep:#8a6b00; --gl-soft:rgba(255,194,26,.10);
-    --win:#3ad07a; --live:#ff4d4d; --final:#7c86f7;
-    --radius:16px; --shadow:0 6px 24px rgba(0,0,0,.35);
+    /* GoodLife brand palette — forest green, orange, gold, cream */
+    --bg:#0e1512; --panel:#15201b; --panel-2:#1d2a23; --line:#2c3d34;
+    --text:#eef2ec; --muted:#9fb0a4;
+    --brand:#124c33;        /* forest green */
+    --brand-ink:#e7dbc4;    /* cream */
+    --accent:#e0451f;       /* GoodLife orange */
+    --gl:#f2a93b; --gl-deep:#7a5312; --gl-soft:rgba(242,169,59,.12); /* gold highlight */
+    --win:#3ad07a; --live:#e0451f; --final:#7c86f7;
+    --radius:16px; --shadow:0 6px 24px rgba(0,0,0,.40);
     font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
   }
   @media (prefers-color-scheme:light){
-    :root{--bg:#f4f6fa;--panel:#ffffff;--panel-2:#f7f9fc;--line:#e4e8ef;
-      --text:#161a22;--muted:#606a7b;--gl-soft:rgba(255,194,26,.16);--shadow:0 6px 22px rgba(20,30,50,.10);}
+    :root{--bg:#f5f2ea;--panel:#ffffff;--panel-2:#faf7f0;--line:#e7e0d2;
+      --text:#17231c;--muted:#5f6f62;--gl-soft:rgba(242,169,59,.18);--shadow:0 6px 22px rgba(20,40,25,.10);}
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.45}
@@ -23,10 +29,11 @@
   .wrap{max-width:960px;margin:0 auto;padding:20px 16px 64px}
 
   header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
-  .badge-narch{font-weight:800;letter-spacing:.5px;font-size:13px;color:#fff;background:var(--accent);
-    padding:5px 10px;border-radius:8px}
+  .logo{width:58px;height:58px;object-fit:contain;flex:0 0 auto;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+  .badge-narch{font-weight:800;letter-spacing:.5px;font-size:12px;color:var(--brand-ink);background:var(--brand);
+    padding:4px 9px;border-radius:7px}
   h1{font-size:clamp(20px,4.4vw,30px);margin:0;font-weight:800;letter-spacing:-.3px}
-  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .sub{color:var(--muted);font-size:13px;margin-top:3px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
   .rhs{margin-left:auto;display:flex;flex-direction:column;align-items:flex-end;gap:7px}
   .updated{text-align:right;font-size:12px;color:var(--muted)}
   .updated b{color:var(--text)}
@@ -35,7 +42,7 @@
     padding:7px 14px;cursor:pointer;transition:background .15s,opacity .15s;box-shadow:var(--shadow)}
   .refresh:hover{background:var(--panel-2)}
   .refresh:disabled{opacity:.55;cursor:default}
-  .refresh .ico{display:inline-block;font-size:14px;line-height:1}
+  .refresh .ico{display:inline-block;font-size:14px;line-height:1;color:var(--accent)}
   .refresh.busy .ico{animation:spin .8s linear infinite}
   @keyframes spin{to{transform:rotate(360deg)}}
   .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--win);margin-right:5px;
@@ -52,14 +59,16 @@
     box-shadow:var(--shadow);padding:18px 18px 16px;position:relative;overflow:hidden}
   .spot::after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;
     background:radial-gradient(circle,var(--gl-soft),transparent 70%)}
+  .spot::before{content:"";position:absolute;right:12px;bottom:-14px;width:132px;height:132px;
+    background:url("logo.png") right bottom/contain no-repeat;opacity:.12;pointer-events:none}
   .spot .eyebrow{color:var(--gl);font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase}
-  .spot h2{margin:4px 0 2px;font-size:clamp(20px,5vw,28px);font-weight:800}
-  .spot .rankline{color:var(--muted);font-size:13px}
-  .statrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .spot h2{margin:4px 0 2px;font-size:clamp(20px,5vw,28px);font-weight:800;position:relative}
+  .spot .rankline{color:var(--muted);font-size:13px;position:relative}
+  .statrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px;position:relative}
   .stat{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 14px;min-width:70px;flex:1}
   .stat .n{font-size:22px;font-weight:800;line-height:1;white-space:nowrap}
   .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:4px}
-  .next{margin-top:14px;background:var(--bg);border:1px dashed var(--gl-deep);border-radius:12px;padding:12px 14px}
+  .next{margin-top:14px;background:var(--bg);border:1px dashed var(--gl-deep);border-radius:12px;padding:12px 14px;position:relative}
   .next .lbl{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gl);font-weight:700}
   .next .m{font-size:16px;font-weight:700;margin-top:3px}
   .next .when{color:var(--muted);font-size:13px;margin-top:2px}
@@ -78,10 +87,10 @@
   td.team .short{display:none}
   .pts{font-weight:800}
   tr.gl{background:var(--gl-soft)}
-  tr.gl td{border-color:rgba(255,194,26,.25)}
+  tr.gl td{border-color:rgba(242,169,59,.28)}
   tr.gl td.team .full{color:var(--gl)}
-  .glchip{font-size:9px;font-weight:800;letter-spacing:.5px;color:#161a22;background:var(--gl);
-    padding:2px 6px;border-radius:20px;text-transform:uppercase}
+  .glchip{font-size:9px;font-weight:800;letter-spacing:.5px;color:var(--brand-ink);background:var(--brand);
+    padding:2px 7px;border-radius:20px;text-transform:uppercase}
 
   /* Schedule */
   .day{margin-top:16px}
@@ -108,9 +117,10 @@
 
   footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12px}
   footer a{color:var(--muted)}
-  .err{background:rgba(255,59,59,.12);border:1px solid var(--accent);color:var(--text);
+  .err{background:rgba(224,69,31,.12);border:1px solid var(--accent);color:var(--text);
     padding:12px 14px;border-radius:12px;font-size:14px}
   @media (max-width:480px){
+    .logo{width:48px;height:48px}
     td.team .full{display:none}
     td.team .short{display:inline;font-weight:600}
     .g-row .nm{font-size:14px}
@@ -120,10 +130,10 @@
 <body>
 <div class="wrap">
   <header class="top">
-    <span class="badge-narch">NARCH</span>
+    <img id="logo" class="logo" src="logo.png" alt="Oakland GoodLife" onerror="this.remove()">
     <div>
-      <h1>Finals · 40 &amp; Over</h1>
-      <div class="sub">Tracking all six teams — spotlight on <b style="color:var(--gl)">Oakland Goodlife</b></div>
+      <h1>Oakland GoodLife</h1>
+      <div class="sub"><span class="badge-narch">NARCH</span> Finals · 40 &amp; Over division tracker</div>
     </div>
     <div class="rhs">
       <div class="updated" id="updated">Loading…</div>
