@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>NARCH Finals · 40 &amp; Over · GoodLife Tracker</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1e222c; --line:#2a2f3a;
+    --text:#e8ebf1; --muted:#9aa3b2; --accent:#ff3b3b; /* NARCH red */
+    --gl:#ffc21a; --gl-deep:#8a6b00; --gl-soft:rgba(255,194,26,.10);
+    --win:#3ad07a; --live:#ff4d4d; --final:#7c86f7;
+    --radius:16px; --shadow:0 6px 24px rgba(0,0,0,.35);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:light){
+    :root{--bg:#f4f6fa;--panel:#ffffff;--panel-2:#f7f9fc;--line:#e4e8ef;
+      --text:#161a22;--muted:#606a7b;--gl-soft:rgba(255,194,26,.16);--shadow:0 6px 22px rgba(20,30,50,.10);}
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased;line-height:1.45}
+  a{color:inherit}
+  .wrap{max-width:960px;margin:0 auto;padding:20px 16px 64px}
+
+  header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+  .badge-narch{font-weight:800;letter-spacing:.5px;font-size:13px;color:#fff;background:var(--accent);
+    padding:5px 10px;border-radius:8px}
+  h1{font-size:clamp(20px,4.4vw,30px);margin:0;font-weight:800;letter-spacing:-.3px}
+  .sub{color:var(--muted);font-size:13px;margin-top:2px}
+  .updated{margin-left:auto;text-align:right;font-size:12px;color:var(--muted)}
+  .updated b{color:var(--text)}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--win);margin-right:5px;
+    vertical-align:middle;box-shadow:0 0 0 0 rgba(58,208,122,.6);animation:pulse 2s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(58,208,122,.5)}70%{box-shadow:0 0 0 7px rgba(58,208,122,0)}100%{box-shadow:0 0 0 0 rgba(58,208,122,0)}}
+
+  section{margin-top:22px}
+  .sec-title{font-size:12px;text-transform:uppercase;letter-spacing:1.4px;color:var(--muted);
+    margin:0 0 10px 2px;font-weight:700}
+
+  /* GoodLife spotlight */
+  .spot{background:linear-gradient(135deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);border-left:5px solid var(--gl);border-radius:var(--radius);
+    box-shadow:var(--shadow);padding:18px 18px 16px;position:relative;overflow:hidden}
+  .spot::after{content:"";position:absolute;right:-40px;top:-40px;width:160px;height:160px;
+    background:radial-gradient(circle,var(--gl-soft),transparent 70%)}
+  .spot .eyebrow{color:var(--gl);font-weight:800;font-size:12px;letter-spacing:1.5px;text-transform:uppercase}
+  .spot h2{margin:4px 0 2px;font-size:clamp(20px,5vw,28px);font-weight:800}
+  .spot .rankline{color:var(--muted);font-size:13px}
+  .statrow{display:flex;gap:10px;flex-wrap:wrap;margin-top:14px}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:9px 14px;min-width:70px;flex:1}
+  .stat .n{font-size:22px;font-weight:800;line-height:1}
+  .stat .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:4px}
+  .next{margin-top:14px;background:var(--bg);border:1px dashed var(--gl-deep);border-radius:12px;padding:12px 14px}
+  .next .lbl{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--gl);font-weight:700}
+  .next .m{font-size:16px;font-weight:700;margin-top:3px}
+  .next .when{color:var(--muted);font-size:13px;margin-top:2px}
+
+  /* Standings */
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow);overflow:hidden}
+  table{width:100%;border-collapse:collapse;font-size:14px}
+  thead th{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);
+    text-align:center;padding:11px 6px;font-weight:700;background:var(--panel-2)}
+  thead th.team,tbody td.team{text-align:left}
+  tbody td{padding:11px 6px;text-align:center;border-top:1px solid var(--line);white-space:nowrap}
+  tbody td.rk{color:var(--muted);width:26px}
+  td.team{display:flex;align-items:center;gap:8px;padding-left:14px}
+  td.team .full{font-weight:600}
+  td.team .short{display:none}
+  .pts{font-weight:800}
+  tr.gl{background:var(--gl-soft)}
+  tr.gl td{border-color:rgba(255,194,26,.25)}
+  tr.gl td.team .full{color:var(--gl)}
+  .glchip{font-size:9px;font-weight:800;letter-spacing:.5px;color:#161a22;background:var(--gl);
+    padding:2px 6px;border-radius:20px;text-transform:uppercase}
+
+  /* Schedule */
+  .day{margin-top:16px}
+  .day h3{font-size:13px;color:var(--muted);margin:0 0 8px 2px;font-weight:700;text-transform:uppercase;letter-spacing:.8px}
+  .game{display:grid;grid-template-columns:60px 1fr auto;gap:10px;align-items:center;
+    background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
+  .game.gl{border-color:var(--gl);background:linear-gradient(90deg,var(--gl-soft),transparent 60%)}
+  .g-time{font-size:12px;color:var(--muted);text-align:center;line-height:1.25}
+  .g-time .t{font-weight:700;color:var(--text);font-size:14px}
+  .g-teams{min-width:0}
+  .g-row{display:flex;align-items:center;gap:8px;padding:1px 0}
+  .g-row .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .g-row.win .nm{color:var(--win)}
+  .g-row.gl .nm{color:var(--gl);font-weight:800}
+  .g-row .sc{margin-left:auto;font-weight:800;font-variant-numeric:tabular-nums;font-size:16px;min-width:22px;text-align:right}
+  .g-status{justify-self:end;text-align:right}
+  .pill{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;
+    padding:3px 8px;border-radius:20px;white-space:nowrap}
+  .pill.live{background:var(--live);color:#fff}
+  .pill.final{background:rgba(124,134,247,.16);color:var(--final)}
+  .pill.soon{background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
+  .watch{display:block;margin-top:5px;font-size:11px;color:var(--live);font-weight:700;text-decoration:none}
+  .facility{font-size:11px;color:var(--muted);margin-top:2px}
+
+  footer{margin-top:34px;text-align:center;color:var(--muted);font-size:12px}
+  footer a{color:var(--muted)}
+  .err{background:rgba(255,59,59,.12);border:1px solid var(--accent);color:var(--text);
+    padding:12px 14px;border-radius:12px;font-size:14px}
+  @media (max-width:480px){
+    td.team .full{display:none}
+    td.team .short{display:inline;font-weight:600}
+    .g-row .nm{font-size:14px}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <span class="badge-narch">NARCH</span>
+    <div>
+      <h1>Finals · 40 &amp; Over</h1>
+      <div class="sub">Tracking all six teams — spotlight on <b style="color:var(--gl)">Oakland Goodlife</b></div>
+    </div>
+    <div class="updated" id="updated">Loading…</div>
+  </header>
+
+  <div id="app"></div>
+
+  <footer>
+    Auto-updates every ~2 hours from the official NARCH scoreboard ·
+    <a id="srclink" href="#" target="_blank" rel="noopener">Live source ↗</a><br>
+    This page also refreshes itself every 90&nbsp;seconds while open.
+  </footer>
+</div>
+
+<script>
+const DATA_URL = "data/latest.json";
+const gl = v => v; // passthrough
+
+function relTime(iso){
+  const then = new Date(iso).getTime();
+  const s = Math.round((Date.now()-then)/1000);
+  if (isNaN(s)) return "";
+  if (s < 60) return "just now";
+  if (s < 3600) return Math.floor(s/60)+"m ago";
+  if (s < 86400) return Math.floor(s/3600)+"h ago";
+  return Math.floor(s/86400)+"d ago";
+}
+function fmtDay(iso){
+  const d = new Date(iso);
+  return d.toLocaleDateString(undefined,{weekday:"long",month:"short",day:"numeric"});
+}
+function fmtClock(iso){
+  const d = new Date(iso);
+  return d.toLocaleTimeString(undefined,{hour:"numeric",minute:"2-digit"});
+}
+function esc(s){return (s??"").toString().replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+
+const isFinal = s => /\bfinal\b|forfeit/i.test(s||"");
+const notStarted = s => !s || /not started|scheduled|upcoming|postponed|cancel|delay/i.test(s);
+// Anything with a status that isn't "final" and isn't "not started" is in progress.
+const isLive  = s => !!(s||"").trim() && !isFinal(s) && !notStarted(s);
+
+function statusPill(g){
+  if (isLive(g.status))  return `<span class="pill live">● Live</span>`;
+  if (isFinal(g.status)) return `<span class="pill final">Final${g.shootout?" · SO":g.overtime?" · OT":""}</span>`;
+  return `<span class="pill soon">Upcoming</span>`;
+}
+
+function spotlight(d){
+  const s = d.standings.find(t=>t.is_goodlife);
+  const games = d.games.filter(g=>g.is_goodlife);
+  const now = Date.now();
+  const next = games.find(g => notStarted(g.status) || isLive(g.status))
+            || games.slice().reverse().find(()=>false);
+  const rankTxt = s ? `#${s.rank} of ${d.standings.length} · ${d.division_name}` : d.division_name;
+  const rec = s ? `${s.w}-${s.l}-${s.t}` : "—";
+  let nextHtml = "";
+  if(next){
+    const opp = next.home_is_goodlife ? next.away_team : next.home_team;
+    const homeAway = next.home_is_goodlife ? "vs" : "@";
+    nextHtml = `<div class="next">
+      <div class="lbl">${isLive(next.status)?"Playing now":"Next game"}</div>
+      <div class="m">${homeAway} ${esc(opp)}</div>
+      <div class="when">${esc(fmtDay(next.datetime))} · ${esc(fmtClock(next.datetime))}${next.rink?` · ${esc(next.rink)}`:""}${isLive(next.status)?` · <b style="color:var(--live)">${esc(next.status)}</b>`:""}</div>
+    </div>`;
+  } else {
+    nextHtml = `<div class="next"><div class="lbl">Schedule</div><div class="m">Round robin complete</div></div>`;
+  }
+  return `<section>
+    <div class="spot">
+      <div class="eyebrow">★ GoodLife spotlight</div>
+      <h2>${esc(s?s.team:"Oakland Goodlife - CA")}</h2>
+      <div class="rankline">${esc(rankTxt)}</div>
+      <div class="statrow">
+        <div class="stat"><div class="n">${esc(rec)}</div><div class="k">W-L-T</div></div>
+        <div class="stat"><div class="n">${s?s.pts:"—"}</div><div class="k">Points</div></div>
+        <div class="stat"><div class="n">${s?s.gf:"—"}</div><div class="k">Goals For</div></div>
+        <div class="stat"><div class="n">${s?s.ga:"—"}</div><div class="k">Goals Against</div></div>
+      </div>
+      ${nextHtml}
+    </div>
+  </section>`;
+}
+
+function standingsTable(d){
+  const rows = d.standings.map(s=>`
+    <tr class="${s.is_goodlife?"gl":""}">
+      <td class="rk">${s.rank}</td>
+      <td class="team">
+        <span class="full">${esc(s.team)}</span>
+        <span class="short">${esc(s.team_short)}</span>
+        ${s.is_goodlife?'<span class="glchip">GoodLife</span>':""}
+      </td>
+      <td>${s.gp}</td><td>${s.w}</td><td>${s.l}</td><td>${s.t}</td>
+      <td class="pts">${s.pts}</td><td>${s.gf}</td><td>${s.ga}</td>
+    </tr>`).join("");
+  return `<section>
+    <p class="sec-title">Standings — Round Robin</p>
+    <div class="card"><table>
+      <thead><tr>
+        <th></th><th class="team">Team</th><th>GP</th><th>W</th><th>L</th><th>T</th><th>Pts</th><th>GF</th><th>GA</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  </section>`;
+}
+
+function teamRow(name, score, isWinner, isGL, hasScore){
+  return `<div class="g-row ${isGL?"gl":""} ${isWinner?"win":""}">
+    <span class="nm">${esc(name)}</span>
+    ${hasScore?`<span class="sc">${score}</span>`:""}
+  </div>`;
+}
+
+function schedule(d){
+  // group by date
+  const byDay = {};
+  d.games.forEach(g=>{ (byDay[g.date] ||= []).push(g); });
+  const days = Object.keys(byDay).sort();
+  const blocks = days.map(day=>{
+    const games = byDay[day].map(g=>{
+      const done = isFinal(g.status), live = isLive(g.status);
+      const hasScore = done || live;
+      const hw = hasScore && g.home_score > g.away_score;
+      const aw = hasScore && g.away_score > g.home_score;
+      return `<div class="game ${g.is_goodlife?"gl":""}">
+        <div class="g-time"><div class="t">${esc(fmtClock(g.datetime))}</div><div>#${esc(g.number)}</div></div>
+        <div class="g-teams">
+          ${teamRow(g.home_team_short, g.home_score, hw, g.home_is_goodlife, hasScore)}
+          ${teamRow(g.away_team_short, g.away_score, aw, g.away_is_goodlife, hasScore)}
+          ${g.rink||g.facility?`<div class="facility">${esc([g.rink,g.facility].filter(Boolean).join(" · "))}</div>`:""}
+        </div>
+        <div class="g-status">
+          ${statusPill(g)}
+          ${live&&g.watch_live_url?`<a class="watch" href="${esc(g.watch_live_url)}" target="_blank" rel="noopener">▶ Watch</a>`:""}
+        </div>
+      </div>`;
+    }).join("");
+    return `<div class="day"><h3>${esc(fmtDay(byDay[day][0].datetime))}</h3>${games}</div>`;
+  }).join("");
+  return `<section>
+    <p class="sec-title">Schedule &amp; Results</p>
+    ${blocks}
+  </section>`;
+}
+
+async function load(){
+  try{
+    const res = await fetch(DATA_URL + "?t=" + Date.now(), {cache:"no-store"});
+    if(!res.ok) throw new Error("HTTP "+res.status);
+    const d = await res.json();
+    document.getElementById("app").innerHTML =
+      spotlight(d) + standingsTable(d) + schedule(d);
+    const anyLive = d.games.some(g=>isLive(g.status));
+    document.getElementById("updated").innerHTML =
+      `${anyLive?'<span class="dot"></span>Games live · ':''}Updated <b>${relTime(d.generated_at)}</b>`;
+    const link = document.getElementById("srclink");
+    if(d.source_url) link.href = d.source_url;
+  }catch(e){
+    document.getElementById("app").innerHTML =
+      `<div class="err">Couldn't load the latest data (${esc(e.message)}). It will retry automatically — the scraper updates every couple of hours.</div>`;
+  }
+}
+load();
+setInterval(load, 90000); // self-refresh while the tab is open
+</script>
+</body>
+</html>
