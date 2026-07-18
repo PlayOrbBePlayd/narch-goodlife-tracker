@@ -177,7 +177,9 @@ def is_goodlife(team_id, name):
 
 def main():
     ticket = login()
-    schedule_html = fetch_partial(f"schedule/table?division_id={DIVISION_ID}", ticket)
+    # all=1 returns the FULL schedule including completed ("Final") games.
+    # Without it the API only returns upcoming games and results disappear.
+    schedule_html = fetch_partial(f"schedule/table?division_id={DIVISION_ID}&all=1", ticket)
     standings_html = fetch_partial(f"standings/table?division_id={DIVISION_ID}", ticket)
 
     games = parse_games(schedule_html)
