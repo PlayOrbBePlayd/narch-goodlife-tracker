@@ -72,15 +72,70 @@ def fetch_partial(path, ticket):
 
 # --- Parsing ---------------------------------------------------------------
 
+def _extract_json_arrays(text):
+    """
+    Pull out whole JSON arrays using balanced bracket matching.
+
+    Games can contain nested objects (playoff games carry
+    "home_team_logo_url":{}), so a regex that forbids braces silently drops them.
+    """
+    out = []
+    idx = 0
+    while True:
+        idx = text.find('[{"', idx)
+        if idx == -1:
+            break
+        depth, in_str, esc, end = 0, False, False, -1
+        for i in range(idx, len(text)):
+            c = text[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif c == "\\":
+                    esc = True
+                elif c == '"':
+                    in_str = False
+            else:
+                if c == '"':
+                    in_str = True
+                elif c in "[{":
+                    depth += 1
+                elif c in "]}":
+                    depth -= 1
+                    if depth == 0:
+                        end = i
+                        break
+        if end == -1:
+            idx += 3
+            continue
+        out.append(text[idx:end + 1])
+        idx = end + 1
+    return out
+
+
 def parse_games(schedule_html):
-    """Games are embedded as JSON objects inside the schedule partial."""
+    """Games are embedded as JSON arrays inside the schedule partial."""
     games = {}
-    for blob in re.findall(r'\{[^{}]*?"game_id":\d+[^{}]*\}', schedule_html):
+    for chunk in _extract_json_arrays(schedule_html):
+        if '"game_id":' not in chunk:
+            continue
         try:
-            g = json.loads(blob)
+            arr = json.loads(chunk)
         except json.JSONDecodeError:
             continue
-        games[g["game_id"]] = g  # dedupe: the partial repeats each game
+        if not isinstance(arr, list):
+            continue
+        for g in arr:
+            if isinstance(g, dict) and g.get("game_id") is not None:
+                games[g["game_id"]] = g  # dedupe: the partial repeats each game
+
+    if not games:  # fallback: older flat-object shape
+        for blob in re.findall(r'\{[^{}]*?"game_id":\d+[^{}]*\}', schedule_html):
+            try:
+                g = json.loads(blob)
+            except json.JSONDecodeError:
+                continue
+            games[g["game_id"]] = g
 
     out = []
     for g in games.values():
