@@ -97,6 +97,10 @@
   .game{display:grid;grid-template-columns:60px 1fr auto;gap:10px;align-items:center;
     background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:11px 13px;margin-bottom:8px}
   .game.gl{border-color:var(--gl);background:linear-gradient(90deg,var(--gl-soft),transparent 60%)}
+  .game.tappable{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}
+  .game.tappable:hover{transform:translateY(-1px);box-shadow:var(--shadow)}
+  .game.tappable:active{transform:translateY(0)}
+  .game.tappable:focus-visible{outline:2px solid var(--gl);outline-offset:2px}
   .g-time{font-size:12px;color:var(--muted);text-align:center;line-height:1.25}
   .g-time .t{font-weight:700;color:var(--text);font-size:14px}
   .g-teams{min-width:0}
@@ -186,10 +190,44 @@ async function apiPartial(path,ticket){
   if(!r.ok) throw new Error("partial "+r.status);
   return (await r.json()).content;
 }
+// Pulls out whole JSON arrays with balanced bracket matching. Games can contain
+// nested objects (e.g. playoff games have "home_team_logo_url":{}), so a regex
+// that forbids braces silently drops them.
+function extractJsonArrays(text){
+  const out = [];
+  let idx = 0;
+  while((idx = text.indexOf('[{"', idx)) !== -1){
+    let depth = 0, inStr = false, esc = false, end = -1;
+    for(let i = idx; i < text.length; i++){
+      const c = text[i];
+      if(inStr){
+        if(esc) esc = false;
+        else if(c === '\\') esc = true;
+        else if(c === '"') inStr = false;
+      }else{
+        if(c === '"') inStr = true;
+        else if(c === '[' || c === '{') depth++;
+        else if(c === ']' || c === '}'){ depth--; if(depth === 0){ end = i; break; } }
+      }
+    }
+    if(end === -1){ idx += 3; continue; }
+    out.push(text.slice(idx, end + 1));
+    idx = end + 1;
+  }
+  return out;
+}
 function parseGamesHtml(html){
   const un = heEnt(html), byId = {};
-  for(const m of un.matchAll(/\{[^{}]*?"game_id":\d+[^{}]*\}/g)){
-    try{ const o = JSON.parse(m[0]); byId[o.game_id] = o; }catch(e){}
+  for(const chunk of extractJsonArrays(un)){
+    if(!chunk.includes('"game_id":')) continue;
+    let arr; try{ arr = JSON.parse(chunk); }catch(e){ continue; }
+    if(!Array.isArray(arr)) continue;
+    for(const o of arr) if(o && typeof o === "object" && o.game_id != null) byId[o.game_id] = o;
+  }
+  if(!Object.keys(byId).length){   // fallback: older flat-object shape
+    for(const m of un.matchAll(/\{[^{}]*?"game_id":\d+[^{}]*\}/g)){
+      try{ const o = JSON.parse(m[0]); byId[o.game_id] = o; }catch(e){}
+    }
   }
   const out = Object.values(byId).map(g=>({
     game_id:g.game_id,
@@ -348,7 +386,8 @@ function schedule(d){
       const hasScore = done || live;
       const hw = hasScore && g.home_score > g.away_score;
       const aw = hasScore && g.away_score > g.home_score;
-      return `<div class="game ${g.is_goodlife?"gl":""}">
+      const tap = g.is_goodlife && done;   // finished GoodLife games react to a tap
+      return `<div class="game ${g.is_goodlife?"gl":""}${tap?" tappable":""}" data-game-id="${g.game_id}"${tap?' role="button" tabindex="0" aria-label="Replay this result"':""}>
         <div class="g-time"><div class="t">${esc(fmtClock(g.datetime))}</div><div>#${esc(g.number)}</div></div>
         <div class="g-teams">
           ${teamRow(g.home_team_short, g.home_score, hw, g.home_is_goodlife, hasScore)}
@@ -422,6 +461,29 @@ function fireConfetti(power){
   requestAnimationFrame(frame);
 }
 
+// Brief blackout — used when tapping a GoodLife loss.
+function flashDark(){
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const ov = document.createElement("div");
+  ov.style.cssText = "position:fixed;inset:0;background:#000;opacity:0;z-index:9998;" +
+                     "pointer-events:none;transition:opacity .5s ease";
+  document.body.appendChild(ov);
+  const kill = setTimeout(function(){ if(ov.parentNode) ov.remove(); }, 3000);
+  setTimeout(function(){ ov.style.opacity = "0.93"; }, 20);
+  setTimeout(function(){ ov.style.opacity = "0"; }, 1100);
+  setTimeout(function(){ clearTimeout(kill); if(ov.parentNode) ov.remove(); }, 1800);
+}
+
+// Tap a finished GoodLife game: win -> confetti, loss -> the lights go out.
+function replayResult(g){
+  if(!g || !g.is_goodlife || !isFinal(g.status)) return;
+  const gl  = g.home_is_goodlife ? g.home_score : g.away_score;
+  const opp = g.home_is_goodlife ? g.away_score : g.home_score;
+  if(typeof gl !== "number" || typeof opp !== "number") return;
+  if(gl > opp) fireConfetti(1.5);
+  else if(gl < opp) flashDark();
+}
+
 const CELEB_KEY = "gl_celebrated_wins";
 function loadCelebrated(){
   try { return new Set(JSON.parse(localStorage.getItem(CELEB_KEY) || "[]")); }
@@ -456,6 +518,7 @@ function celebrateNewWins(d){
 
 // --- load / refresh --------------------------------------------------------
 let busy = false;
+let lastData = null;   // most recent render, so taps can look a game up by id
 async function load(){
   if(busy) return;
   busy = true;
@@ -472,6 +535,7 @@ async function load(){
     }catch(_){}
   }
   if(d){
+    lastData = d;
     document.getElementById("app").innerHTML = spotlight(d) + standingsTable(d) + schedule(d);
     const anyLive = d.games.some(g=>isLive(g.status));
     document.getElementById("updated").innerHTML =
@@ -486,6 +550,19 @@ async function load(){
   if(btn){ btn.disabled = false; btn.classList.remove("busy"); }
   busy = false;
 }
+
+// Delegated so it keeps working after every re-render.
+function handleCardActivate(e){
+  const card = e.target.closest ? e.target.closest(".game.tappable") : null;
+  if(!card || !lastData) return;
+  const id = Number(card.getAttribute("data-game-id"));
+  replayResult(lastData.games.find(g => g.game_id === id));
+}
+const appEl = document.getElementById("app");
+appEl.addEventListener("click", handleCardActivate);
+appEl.addEventListener("keydown", function(e){
+  if(e.key === "Enter" || e.key === " "){ e.preventDefault(); handleCardActivate(e); }
+});
 
 document.getElementById("refresh").addEventListener("click", load);
 document.addEventListener("visibilitychange", ()=>{ if(document.visibilityState==="visible") load(); });
