@@ -222,7 +222,7 @@ function parseStandingsHtml(html){
 async function fetchLive(){
   const ticket = await apiLogin();
   const [sh,st] = await Promise.all([
-    apiPartial("schedule/table?division_id="+DIV, ticket),
+    apiPartial("schedule/table?division_id="+DIV+"&all=1", ticket),
     apiPartial("standings/table?division_id="+DIV, ticket)
   ]);
   const games = parseGamesHtml(sh), standings = parseStandingsHtml(st);
@@ -369,6 +369,91 @@ function schedule(d){
   </section>`;
 }
 
+// --- confetti on a GoodLife win --------------------------------------------
+const CONFETTI = ["#124c33","#e0451f","#f2a93b","#e7dbc4","#ffffff"];
+function fireConfetti(power){
+  power = power || 1;
+  if (window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const W = window.innerWidth || document.documentElement.clientWidth;
+  const H = window.innerHeight || document.documentElement.clientHeight;
+  if (!W || !H) return;   // no measurable viewport: nothing to draw on
+  const cv = document.createElement("canvas");
+  cv.style.cssText = "position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:9999";
+  document.body.appendChild(cv);
+  const ctx = cv.getContext("2d");
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = W * dpr; cv.height = H * dpr; ctx.setTransform(dpr,0,0,dpr,0,0);
+  const parts = [];
+  const n = Math.round(150 * power);
+  for(let i=0;i<n;i++){
+    parts.push({
+      x: W * (0.5 + (Math.random()-0.5) * 0.7),
+      y: -20 - Math.random() * H * 0.35,
+      vx: (Math.random()-0.5) * 7,
+      vy: 2 + Math.random() * 4,
+      w: 6 + Math.random() * 6,
+      h: 8 + Math.random() * 9,
+      rot: Math.random() * Math.PI * 2,
+      vr: (Math.random()-0.5) * 0.32,
+      c: CONFETTI[(Math.random()*CONFETTI.length)|0]
+    });
+  }
+  const DUR = 3400, start = performance.now();
+  // Safety net: browsers throttle requestAnimationFrame in hidden/background tabs,
+  // which would strand the canvas. This guarantees it is always removed.
+  const failsafe = setTimeout(function(){ if(cv.parentNode) cv.remove(); }, DUR + 1500);
+  function done(){ clearTimeout(failsafe); if(cv.parentNode) cv.remove(); }
+  function frame(now){
+    const t = now - start;
+    ctx.clearRect(0,0,W,H);
+    let alive = false;
+    const fade = t > DUR - 900 ? Math.max(0, (DUR - t)/900) : 1;
+    for(const p of parts){
+      p.vy += 0.13; p.vx *= 0.995; p.x += p.vx; p.y += p.vy; p.rot += p.vr;
+      if(p.y < H + 40) alive = true;
+      ctx.save();
+      ctx.globalAlpha = fade;
+      ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.fillStyle = p.c; ctx.fillRect(-p.w/2, -p.h/2, p.w, p.h);
+      ctx.restore();
+    }
+    if(t < DUR && alive) requestAnimationFrame(frame); else done();
+  }
+  requestAnimationFrame(frame);
+}
+
+const CELEB_KEY = "gl_celebrated_wins";
+function loadCelebrated(){
+  try { return new Set(JSON.parse(localStorage.getItem(CELEB_KEY) || "[]")); }
+  catch(e){ return new Set(); }
+}
+function saveCelebrated(set){
+  try { localStorage.setItem(CELEB_KEY, JSON.stringify(Array.from(set))); } catch(e){}
+}
+function goodlifeWinIds(d){
+  return d.games.filter(g=>{
+    if(!g.is_goodlife || !isFinal(g.status)) return false;
+    const gl  = g.home_is_goodlife ? g.home_score : g.away_score;
+    const opp = g.home_is_goodlife ? g.away_score : g.home_score;
+    return typeof gl === "number" && typeof opp === "number" && gl > opp;
+  }).map(g=>g.game_id);
+}
+// Celebrates each win the first time this browser sees it (never twice).
+function celebrateNewWins(d){
+  const wins = goodlifeWinIds(d);
+  if(!wins.length) return 0;
+  // If the tab is hidden the animation can't run — leave the win uncelebrated
+  // so the confetti fires when the fan actually comes back to the page.
+  if(document.visibilityState !== "visible") return 0;
+  const seen = loadCelebrated();
+  const fresh = wins.filter(id => !seen.has(id));
+  if(!fresh.length) return 0;
+  fresh.forEach(id => seen.add(id));
+  saveCelebrated(seen);
+  fireConfetti(Math.min(1 + (fresh.length - 1) * 0.35, 2));
+  return fresh.length;
+}
+
 // --- load / refresh --------------------------------------------------------
 let busy = false;
 async function load(){
@@ -393,6 +478,7 @@ async function load(){
       `${anyLive?'<span class="dot"></span>Games live · ':''}${live?"Live · ":"Cached · "}updated <b>${relTime(d.generated_at)}</b>`;
     const link = document.getElementById("srclink");
     if(d.source_url) link.href = d.source_url;
+    celebrateNewWins(d);
   }else{
     document.getElementById("app").innerHTML =
       `<div class="err">Couldn't reach the scoreboard right now — tap <b>Refresh</b> to try again.</div>`;
